@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="photoeditor.css">
+    <title>Simple Photo Editor</title>
+</head>
+<body>
+    <div class="rectangle">
+        <h1>Online Image Editor</h1>
+    </div>
+
+    <div class="imageContainer">
+        <div class="imageControls">
+            <label for="imageInput">Choose an image:</label>
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+            <button onclick="document.getElementById('imageInput').click();">Browse</button>
+        </div>
+        <br>
+        <img id="selectedImage">
+    </div>
+
+    <div class="filters">
+        <div class="filter-controls">
+            <button id="brightnessMinusBtn">-</button>
+            <span class="filter-text">Brightness</span>
+            <button id="brightnessPlusBtn">+</button>
+        </div>
+        <div class="filter-controls">
+            <button id="contrastMinusBtn">-</button>
+            <span class="filter-text">Contrast</span>
+            <button id="contrastPlusBtn">+</button>
+        </div>
+        <div class="filter-controls">
+            <button id="vibranceMinusBtn">-</button>
+            <span class="filter-text">Vibrance</span>
+            <button id="vibrancePlusBtn">+</button>
+        </div>
+        <div class="filter-controls">
+            <button id="saturationMinusBtn">-</button>
+            <span class="filter-text">Saturation</span>
+            <button id="saturationPlusBtn">+</button>
+        </div>
+    </div>
+    <div class="filter-controls1">
+        <button id="thresholdBtn">Threshold</button>
+        <button id="blurBtn">Blur</button>
+        <button id="cropBtn">Crop</button>
+        <button id="rotateBtn">Rotate</button>
+        <button id="scaleBtn">Scale</button>
+    </div>
+
+    <div class="filter-controls2">
+        <button id="removeFiltersBtn">Remove Filters</button>
+        <button id="downloadImageBtn">Download Image</button>
+    </div>
+
+    <!-- Add shape drawing controls -->
+    <div class="shape-controls">
+        <label for="shapeType">Select Shape:</label>
+        <select id="shapeType">
+            <option value="rectangle">Rectangle</option>
+            <option value="circle">Circle</option>
+        </select>
+        <button id="startDrawing">Start Drawing</button>
+    </div>
+
+    <!-- Canvas for drawing -->
+    <canvas id="drawingCanvas" style="position: absolute; top: 0; left: 0;"></canvas>
+
+    <!-- Laplacian Sharpening -->
+    <button id="sharpenImageBtn">Sharpen Image</button>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const selectedImage = document.getElementById('selectedImage');
+        const brightnessMinusBtn = document.getElementById('brightnessMinusBtn');
+        const brightnessPlusBtn = document.getElementById('brightnessPlusBtn');
+        const contrastMinusBtn = document.getElementById('contrastMinusBtn');
+        const contrastPlusBtn = document.getElementById('contrastPlusBtn');
+        const vibranceMinusBtn = document.getElementById('vibranceMinusBtn');
+        const vibrancePlusBtn = document.getElementById('vibrancePlusBtn');
+        const saturationMinusBtn = document.getElementById('saturationMinusBtn');
+        const saturationPlusBtn = document.getElementById('saturationPlusBtn');
+        const thresholdBtn = document.getElementById('thresholdBtn');
+        const blurBtn = document.getElementById('blurBtn');
+        const cropBtn = document.getElementById('cropBtn');
+        const rotateBtn = document.getElementById('rotateBtn');
+        const scaleBtn = document.getElementById('scaleBtn');
+        const sharpenImageBtn = document.getElementById('sharpenImageBtn');
+        const removeFiltersBtn = document.getElementById('removeFiltersBtn');
+        const downloadImageBtn = document.getElementById('downloadImageBtn');
+
+        let originalImage = null;
+        let currentImage = null;
+        let brightness = 100;
+        let contrast = 100;
+        let vibrance = 100;
+        let saturation = 100;
+        let drawingEnabled = false;
+
+        // Event listener for file input
+        imageInput.addEventListener('change', function () {
+            const file = imageInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    originalImage = new Image();
+                    originalImage.src = e.target.result;
+                    currentImage = new Image();
+                    currentImage.src = e.target.result;
+                    originalImage.onload = function () {
+                        selectedImage.src = e.target.result;
+                        applyFilters();
+                    };
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Event listeners for adjustments
+        brightnessMinusBtn.addEventListener('click', () => adjustFilter('brightness', -10));
+        brightnessPlusBtn.addEventListener('click', () => adjustFilter('brightness', 10));
+        contrastMinusBtn.addEventListener('click', () => adjustFilter('contrast', -10));
+        contrastPlusBtn.addEventListener('click', () => adjustFilter('contrast', 10));
+        vibranceMinusBtn.addEventListener('click', () => adjustFilter('vibrance', -10));
+        vibrancePlusBtn.addEventListener('click', () => adjustFilter('vibrance', 10));
+        saturationMinusBtn.addEventListener('click', () => adjustFilter('saturation', -10));
+        saturationPlusBtn.addEventListener('click', () => adjustFilter('saturation', 10));
+
+        // Event listeners for filter buttons
+        blurBtn.addEventListener('click', () => applyFilter('blur'));
+        cropBtn.addEventListener('click', () => applyFilter('crop'));
+        rotateBtn.addEventListener('click', () => applyFilter('rotate'));
+        scaleBtn.addEventListener('click', () => applyFilter('scale'));
+        sharpenImageBtn.addEventListener('click', () => sharpenImage());
+        removeFiltersBtn.addEventListener('click', () => removeFilters());
+        downloadImageBtn.addEventListener('click', () => downloadImage());
+
+        // Event listener for the start drawing button
+        document.getElementById('startDrawing').addEventListener('click', () => toggleDrawing());
+        document.getElementById('blurBtn').addEventListener('click', applyBlurFilter);
+
+        // Function to adjust filters
+        function adjustFilter(filterType, adjustment) {
+            if (currentImage) {
+                if (filterType === 'brightness') {
+                    brightness = Math.min(200, Math.max(0, brightness + adjustment));
+                } else if (filterType === 'contrast') {
+                    contrast = Math.min(200, Math.max(0, contrast + adjustment));
+                } else if (filterType === 'vibrance') {
+                    vibrance = Math.min(200, Math.max(0, vibrance + adjustment));
+                } else if (filterType === 'saturation') {
+                    saturation = Math.min(200, Math.max(0, saturation + adjustment));
+                }
+
+                applyFilters();
+            }
+        }
+
+        // Function to apply filters
+        function applyFilters() {
+            if (currentImage) {
+                const canvas = document.createElement('canvas');
+                canvas.width = currentImage.width;
+                canvas.height = currentImage.height;
+                const ctx = canvas.getContext('2d');
+                ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${vibrance}%) saturate(${saturation}%)`;
+                ctx.drawImage(currentImage, 0, 0);
+                selectedImage.src = canvas.toDataURL();
+            }
+        }
+
+        // Function to remove all filters
+        function removeFilters() {
+            brightness = 100;
+            contrast = 100;
+            vibrance = 100;
+            saturation = 100;
+            currentImage = originalImage;
+            applyFilters();
+        }
+
+        // Function to apply specific filters
+        function applyFilter(filterType) {
+            if (originalImage) {
+                currentImage = new Image();
+                currentImage.src = originalImage.src;
+                currentImage.onload = () => {
+                    if (filterType === 'blur') {
+                        const blurAmount = 5;
+                        applyBlur(currentImage, blurAmount);
+                    } else if (filterType === 'crop') {
+                        const cropX = 50;
+                        const cropY = 50;
+                        const cropWidth = 200;
+                        const cropHeight = 150;
+                        applyCrop(currentImage, cropX, cropY, cropWidth, cropHeight);
+                    } else if (filterType === 'rotate') {
+                        const rotationAngle = 45;
+                        applyRotation(currentImage, rotationAngle);
+                    } else if (filterType === 'scale') {
+                        const scaleFactor = 0.5;
+                        applyScale(currentImage, scaleFactor);
+                    }
+                };
+            }
+        }
+
+        // Function to apply threshold filter
+        function applyThresholdFilter() {
+            if (currentImage) {
+                const canvas = document.createElement('canvas');
+                canvas.width = currentImage.width;
+                canvas.height = currentImage.height;
+                const ctx = canvas.getContext('2d');
+                ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${vibrance}%) saturate(${saturation}%)`;
+                ctx.drawImage(currentImage, 0, 0);
+
+                const thresholdValue = 128;
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixels = imageData.data;
+
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const r = pixels[i];
+                    const g = pixels[i + 1];
+                    const b = pixels[i + 2];
+                    const grayscale = 0.299 * r + 0.587 * g + 0.114 * b;
+                    const binary = grayscale > thresholdValue ? 255 : 0;
+                    pixels[i] = pixels[i + 1] = pixels[i + 2] = binary;
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+
+                selectedImage.src = canvas.toDataURL();
+            }
+        }
+
+        // Function to apply Laplacian sharpening filter
+        function sharpenImage() {
+            if (currentImage) {
+                currentImage = new Image();
+                currentImage.src = originalImage.src;
+                currentImage.onload = () => {
+                    applyLaplacianFilter(currentImage);
+                };
+            }
+        }
+
+        // Function to apply Laplacian sharpening filter
+        function applyLaplacianFilter(image) {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const ctx = canvas.getContext('2d');
+            ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${vibrance}%) saturate(${saturation}%)`;
+            ctx.drawImage(image, 0, 0);
+
+            const laplacianKernel = [
+                [0, -1, 0],
+                [-1, 5, -1],
+                [0, -1, 0]
+            ];
+
+            const laplacianData = applyConvolutionFilter(ctx, laplacianKernel);
+            ctx.putImageData(laplacianData, 0, 0);
+
+            selectedImage.src = canvas.toDataURL();
+        }
+
+        // Function to apply convolution filter to an image
+        function applyConvolutionFilter(ctx, kernel) {
+            const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+            const data = imageData.data;
+            const width = ctx.canvas.width;
+            const height = ctx.canvas.height;
+            const halfKernelSize = Math.floor(kernel.length / 2);
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const pixelIndex = (y * width + x) * 4;
+                    let red = 0;
+                    let green = 0;
+                    let blue = 0;
+
+                    for (let i = -halfKernelSize; i <= halfKernelSize; i++) {
+                        for (let j = -halfKernelSize; j <= halfKernelSize; j++) {
+                            const neighborY = y + i;
+                            const neighborX = x + j;
+
+                            if (neighborY >= 0 && neighborY < height && neighborX >= 0 && neighborX < width) {
+                                const neighborPixelIndex = (neighborY * width + neighborX) * 4;
+                                const weight = kernel[i + halfKernelSize][j + halfKernelSize];
+                                red += data[neighborPixelIndex] * weight;
+                                green += data[neighborPixelIndex + 1] * weight;
+                                blue += data[neighborPixelIndex + 2] * weight;
+                            }
+                        }
+                    }
+
+                    data[pixelIndex] = red;
+                    data[pixelIndex + 1] = green;
+                    data[pixelIndex + 2] = blue;
+                }
+            }
+
+            return imageData;
+        }
+
+        // Function to apply blur filter
+        // Function to apply blur filter
+// Function to apply blur filter
+// Function to apply blur filter
+function applyBlurFilter() {
+    if (originalImage) {
+        const canvas = document.createElement('canvas');
+        canvas.width = originalImage.width;
+        canvas.height = originalImage.height;
+        const ctx = canvas.getContext('2d');
+        ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${vibrance}%) saturate(${saturation}%)`;
+        ctx.drawImage(originalImage, 0, 0);
+
+        const blurAmount = 5; // Adjust the blur amount as needed
+
+        // Apply the blur effect using a simple box blur algorithm
+        applyBoxBlur(ctx, canvas, blurAmount);
+
+        selectedImage.src = canvas.toDataURL();
+    }
+}
+
+// Function to apply a simple box blur
+function applyBoxBlur(ctx, canvas, blurAmount) {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+
+    for (let i = 0; i < blurAmount; i++) {
+        applyBoxBlurPass(pixels, canvas.width, canvas.height);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+}
+
+// Function to apply a single pass of a box blur
+function applyBoxBlurPass(pixels, width, height) {
+    const side = Math.sqrt(pixels.length / 4);
+    const halfSide = side / 2;
+
+    const data = new Uint8ClampedArray(pixels.length);
+
+    for (let y = 0; y < side; y++) {
+        for (let x = 0; x < side; x++) {
+            const pixelIndex = (y * side + x) * 4;
+            let r = 0, g = 0, b = 0;
+
+            for (let ky = -halfSide; ky <= halfSide; ky++) {
+                for (let kx = -halfSide; kx <= halfSide; kx++) {
+                    const xpos = x + kx;
+                    const ypos = y + ky;
+
+                    if (xpos >= 0 && xpos < side && ypos >= 0 && ypos < side) {
+                        const sourcePixelIndex = (ypos * side + xpos) * 4;
+                        r += pixels[sourcePixelIndex];
+                        g += pixels[sourcePixelIndex + 1];
+                        b += pixels[sourcePixelIndex + 2];
+                    }
+                }
+            }
+
+            data[pixelIndex] = r / (side * side);
+            data[pixelIndex + 1] = g / (side * side);
+            data[pixelIndex + 2] = b / (side * side);
+            data[pixelIndex + 3] = pixels[pixelIndex + 3];
+        }
+    }
+
+    for (let i = 0; i < pixels.length; i++) {
+        pixels[i] = data[i];
+    }
+}
+
+
+// Add an event listener to apply the blur filter
+
+
+
+        // Function to apply crop filter
+        function applyCrop(image, x, y, width, height) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${vibrance}%) saturate(${saturation}%)`;
+            ctx.drawImage(image, x, y, width, height, 0, 0, width, height);
+
+            selectedImage.src = canvas.toDataURL();
+        }
+
+        // Function to apply rotate filter
+        function applyRotation(image, rotationAngle) {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.height;
+            canvas.height = image.width;
+            const ctx = canvas.getContext('2d');
+            ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${vibrance}%) saturate(${saturation}%)`;
+
+            // Rotate the canvas
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate((rotationAngle * Math.PI) / 180);
+            ctx.drawImage(image, -image.width / 2, -image.height / 2);
+
+            selectedImage.src = canvas.toDataURL();
+        }
+
+        // Function to apply scale filter
+        function applyScale(image, scaleFactor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.width * scaleFactor;
+            canvas.height = image.height * scaleFactor;
+            const ctx = canvas.getContext('2d');
+            ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${vibrance}%) saturate(${saturation}%)`;
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+            selectedImage.src = canvas.toDataURL();
+        }
+
+        // Function to toggle drawing
+        function toggleDrawing() {
+            drawingEnabled = !drawingEnabled;
+            const drawingCanvas = document.getElementById('drawingCanvas');
+            drawingCanvas.width = selectedImage.width;
+            drawingCanvas.height = selectedImage.height;
+            const drawingContext = drawingCanvas.getContext('2d');
+            drawingContext.strokeStyle = 'red';
+            drawingContext.lineWidth = 2;
+
+            if (drawingEnabled) {
+                drawingCanvas.style.zIndex = '1';
+            } else {
+                drawingCanvas.style.zIndex = '0';
+            }
+
+            let isDrawing = false;
+            let startX, startY;
+
+            drawingCanvas.addEventListener('mousedown', (e) => {
+                if (drawingEnabled) {
+                    isDrawing = true;
+                    startX = e.offsetX;
+                    startY = e.offsetY;
+                }
+            });
+
+            drawingCanvas.addEventListener('mousemove', (e) => {
+                if (isDrawing) {
+                    const shapeType = document.getElementById('shapeType').value;
+                    drawingContext.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+
+                    if (shapeType === 'rectangle') {
+                        const width = e.offsetX - startX;
+                        const height = e.offsetY - startY;
+                        drawingContext.strokeRect(startX, startY, width, height);
+                    } else if (shapeType === 'circle') {
+                        const radius = Math.sqrt(Math.pow(e.offsetX - startX, 2) + Math.pow(e.offsetY - startY, 2));
+                        drawingContext.beginPath();
+                        drawingContext.arc(startX, startY, radius, 0, 2 * Math.PI);
+                        drawingContext.stroke();
+                    }
+                }
+            });
+
+            drawingCanvas.addEventListener('mouseup', () => {
+                isDrawing = false;
+            });
+        }
+
+        // Function to download the edited image
+        function downloadImage() {
+            if (currentImage) {
+                const canvas = document.createElement('canvas');
+                canvas.width = currentImage.width;
+                canvas.height = currentImage.height;
+                const ctx = canvas.getContext('2d');
+                ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${vibrance}%) saturate(${saturation}%)`;
+                ctx.drawImage(currentImage, 0, 0);
+
+                const downloadLink = document.createElement('a');
+                downloadLink.href = canvas.toDataURL('image/png');
+                downloadLink.download = 'edited_image.png';
+                downloadLink.click();
+            }
+        }
+    </script>
+</body>
+</html>
